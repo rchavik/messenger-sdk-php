@@ -45,10 +45,10 @@ class JYMEngine
 	protected $_ym;
 	protected $_config;
 	protected $_error;
-	
-	public $includeheader = false;	
+
+	public $includeheader = false;
 	public $debug = false;
-	
+
 	private $_expires = false;
 
 	/*
@@ -60,47 +60,47 @@ class JYMEngine
 		$this->_config['secret_key'] = $secret_key;
 		$this->_config['username'] = $username;
 		$this->_config['password'] = $password;
-		
+
 		$this->_ym = array();
 		$this->_error = null;
 	}
-	
+
 	public function fetch_request_token()
-	{	
+	{
 		//prepare url
 		$url = $this::URL_OAUTH_DIRECT;
 		$url .= '?login='. $this->_config['username'];
 		$url .= '&passwd='. $this->_config['password'];
-		$url .= '&oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '&oauth_consumer_key='. $this->_config['consumer_key'];
 		$rs = $this->curl($url);
-		
+
 		if (stripos($rs, 'RequestToken') === false) return false;
 		$request_token = trim(str_replace('RequestToken=', '', $rs));
 		$this->_token['request'] = $request_token;
-		
+
 		return true;
 	}
-	
+
 	public function fetch_access_token()
 	{
 		$ts = time();
 		//prepare url
 		$url = $this::URL_OAUTH_ACCESS_TOKEN;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26';
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. $ts;
 		$url .= '&oauth_token='. $this->_token['request'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$rs = $this->curl($url);
-		
+
 		if (stripos($rs, 'oauth_token') === false) 
 		{
 			$this->_error = $rs;
 			return false;
 		}
-		
+
 		//parse access token
 		$tmp = explode('&', $rs);
 		foreach ($tmp as $row)
@@ -108,50 +108,50 @@ class JYMEngine
 			$col = explode('=', $row);
 			$access_token[$col[0]] = $col[1];
 		}
-	
+
 		$this->_token['access'] = $access_token;
 		$this->_expires = $ts + $this->_token['access']['oauth_expires_in'];
-		
-		return true;	
+
+		return true;
 	}
-	
+
 	public function fetch_crumb()
 	{
 		//prepare url
 		$url = $this::URL_YM_SESSION;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
-		
+		$url .= '&oauth_version=1.0';
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$rs = $this->curl($url, 'get', $header);
-		
+
 		if (stripos($rs, 'crumb') === false) return false;
-		
+
 		$js = json_decode($rs, true);
 		$this->_ym['crumb'] = $js;
-		
+
 		return true;
 	}
-	
+
 	public function signon($status = '', $state = 0)
 	{
 		//prepare url
 		$url = $this::URL_YM_SESSION;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&notifyServerToken=1';
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$postdata = '{"presenceState" : '. $state. ', "presenceMessage" : "'. $status. '"}';
@@ -159,18 +159,18 @@ class JYMEngine
 		$rs = $this->curl($url, 'post', $header, $postdata);
 		$this->includeheader = false;
 		list($header, $body) = explode("\r\n\r\n", $rs, 2);
-		
+
 		//get IM cookie
 		$notifytoken = '';
 		if (preg_match('/set-cookie: IM=(.+?); expires/', $header, $m))
 			$notifytoken = $m[1];
-		
+
 		if (stripos($body, 'sessionId') === false) return false;
-		
+
 		$js = json_decode($body, true);
 		$js['notifytoken'] = $notifytoken;
 		$this->_ym['signon'] = $js;
-		
+
 		return true;
 	}
 
@@ -178,40 +178,40 @@ class JYMEngine
 	{
 		//prepare url
 		$url = $this::URL_YM_SESSION;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
-		
+
 		//additional header
-		$header[] = 'Content-type: application/json; charset=utf-8';	
+		$header[] = 'Content-type: application/json; charset=utf-8';
 		$rs = $this->curl($url, 'delete', $header);
-		
+
 		return true;
 	}
-	
+
 	public function change_presence($status = '', $state = 0)
 	{
 		//prepare url
 		$url = $this::URL_YM_PRESENCE;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$postdata = '{"presenceState" : '. $state. ', "presenceMessage" : "'. $status. '"}';
 		$rs = $this->curl($url, 'put', $header, $postdata);
-				
+
 		return true;
 	}
 
@@ -219,71 +219,71 @@ class JYMEngine
 	{
 		//prepare url
 		$url = $this::URL_YM_MESSAGE;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url = str_replace('{{USER}}', $user, $url);
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$postdata = '{"message" : '. $message. '}';
-		
+
 		$rs = $this->curl($url, 'post', $header, $postdata);
-		
+
 		return true;
 	}
-	
+
 	public function fetch_contact_list()
 	{
 		//prepare url
 		$url = $this::URL_YM_CONTACT;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url .= '&fields=%2Bpresence';
 		$url .= '&fields=%2Bgroups';
-		
+
 		//additional header
-		$header[] = 'Content-type: application/json; charset=utf-8';		
+		$header[] = 'Content-type: application/json; charset=utf-8';
 		$rs = $this->curl($url, 'get', $header);
-				
+
 		if (stripos($rs, 'contact') === false) return false;
-		
+
 		$js = json_decode($rs, true);
-				
+
 		return $js['contacts'];
 	}
-	
+
 	public function add_contact($user, $group = 'Friends', $message = '')
 	{
 		//prepare url
 		$url = $this::URL_YM_GROUP;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url = str_replace('{{GROUP}}', $group, $url);
 		$url = str_replace('{{USER}}', $user, $url);
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$postdata = '{"message" : "'. $message. '"}';
 		$rs = $this->curl($url, 'put', $header, $postdata);
-		
+
 		return true;
 	}
 
@@ -291,24 +291,24 @@ class JYMEngine
 	{
 		//prepare url
 		$url = $this::URL_YM_GROUP;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url = str_replace('{{GROUP}}', $group, $url);
 		$url = str_replace('{{USER}}', $user, $url);
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$rs = $this->curl($url, 'delete', $header);
-		
+
 		return true;
 	}
-	
+
 	public function response_contact($user, $accept = true, $message = '')
 	{
 		if ($accept)
@@ -321,93 +321,93 @@ class JYMEngine
 			$method = 'DELETE';
 			$message == '' ? $reason = 'No thanks' : $reason = $message;
 		}
-		
+
 		//prepare url
 		$url = $this::URL_YM_BUDDYREQUEST;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url = str_replace('{{USER}}', $user, $url);
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$postdata = '{"authReason" : "'. $reason. '"}';
 		$this->includeheader = true;
 		$rs = $this->curl($url, strtolower($method), $header, $postdata);
 		$this->includeheader = true;
-		
+
 		if (strpos($rs, "\r\n\r\n") === false) 
 		{
 			$this->_error = -20;
 			return false;
 		}
-		
+
 		list($header, $body) = explode("\r\n\r\n", $rs, 2);
-		
+
 		//get status code
 		$code = '';
 		if (preg_match('|HTTP/1.1 (.*?) OK|', $header, $m))
 			$code = $m[1];
-				
+
 		if ($code != 200)
 		{
 			$this->_error = $code;
 			return false;
 		}
-		
+
 		return true;
 	}
-	
+
 	public function fetch_notification($seq = 0)
-	{		
+	{
 		//prepare url
 		$url = $this::URL_YM_NOTIFICATION;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url .= '&seq='. intval($seq);
 		$url .= '&count=100';
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$rs = $this->curl($url, 'get', $header);
-	
+
 		$js = json_decode($rs, true);
-		
+
 		if (isset($js['error']))
 		{
 			$this->_error = $js['error'];
 			return false;
 		}
-		
-		if (stripos($rs, 'pendingMsg') === false) return false;		
+
+		if (stripos($rs, 'pendingMsg') === false) return false;
 		if (count($js['responses']) < 1) return false;
-		
+
 		$this->_error = null;
 		return $js['responses'];
 	}
-	
+
 	public function fetch_long_notification($seq = 0)
-	{		
+	{
 		//prepare url
 		$url = $this::URL_YM_NOTIFICATION_LONG;
-		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
+		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26'. $this->_token['access']['oauth_token_secret'];
 		$url .= '&oauth_signature_method=PLAINTEXT';
 		$url .= '&oauth_timestamp='. time();
 		$url .= '&oauth_token='. $this->_token['access']['oauth_token'];
-		$url .= '&oauth_version=1.0';	
+		$url .= '&oauth_version=1.0';
 		$url .= '&sid='. $this->_ym['signon']['sessionId'];
 		$url .= '&seq='. intval($seq);
 		$url .= '&format=json';
@@ -415,58 +415,58 @@ class JYMEngine
 		$url .= '&idle=120';
 		$url .= '&rand='. uniqid(rand());
 		$url .= '&IM='. $this->_ym['signon']['notifytoken'];
-		
+
 		$url = str_replace('{{NOTIFICATION_SERVER}}', $this->_ym['signon']['notifyServer'], $url);
 		$url = str_replace('{{USER}}', $this->_ym['signon']['primaryLoginId'], $url);
-		
+
 		//additional header
 		$header[] = 'Content-type: application/json; charset=utf-8';
 		$header[] = 'Connection: keep-alive';
-		
+
 		$this->includeheader = true;
 		$rs = $this->curl($url, 'get', $header, null, 160);
 		$this->includeheader = false;
-		
+
 		if (strpos($rs, "\r\n\r\n") === false) 
 		{
 			$this->_error = -20;
 			return false;
 		}
-		
+
 		list($header, $body) = explode("\r\n\r\n", $rs, 2);
-		
+
 		//get status code
 		$code = '';
 		if (preg_match('|HTTP/1.1 (.*?) OK|', $header, $m))
 			$code = $m[1];
-				
+
 		if ($code != 200)
 		{
 			$this->_error = $code;
 			return false;
 		}
-		
+
 		if ($body == '')
 		{
 			$this->_error = -10;
 			return false;
 		}
-		
+
 		$js = json_decode($body, true);
-		
+
 		if (isset($js['error']))
 		{
 			$this->_error = $js['error'];
 			return false;
 		}
-		
+
 		$this->_error = null;
 		return $js['responses'];
 	}
-	
-	
-	
-	
+
+
+
+
 	/*
 	 * fetch url using curl
 	 */
@@ -503,7 +503,7 @@ class JYMEngine
 			curl_setopt($s,CURLOPT_CUSTOMREQUEST, 'PUT');
 			curl_setopt($s,CURLOPT_POSTFIELDS, $postdata);
 		}
-		
+
 		curl_setopt($s,CURLOPT_HEADER, $this->includeheader);			 
 		curl_setopt($s,CURLOPT_USERAGENT, 'Mozilla/4.0 (compatible; MSIE 6.0; Windows NT 5.1');
 		curl_setopt($s, CURLOPT_SSL_VERIFYPEER, false);
