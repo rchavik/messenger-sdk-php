@@ -49,6 +49,8 @@ class JYMEngine
 	public $includeheader = false;	
 	public $debug = false;
 	
+	private $_expires = false;
+
 	/*
 	 * constructor
 	 */
@@ -81,13 +83,14 @@ class JYMEngine
 	
 	public function fetch_access_token()
 	{
+		$ts = time();
 		//prepare url
 		$url = $this::URL_OAUTH_ACCESS_TOKEN;
 		$url .= '?oauth_consumer_key='. $this->_config['consumer_key'];		
 		$url .= '&oauth_nonce='. uniqid(rand());
 		$url .= '&oauth_signature='. $this->_config['secret_key']. '%26';
 		$url .= '&oauth_signature_method=PLAINTEXT';
-		$url .= '&oauth_timestamp='. time();
+		$url .= '&oauth_timestamp='. $ts;
 		$url .= '&oauth_token='. $this->_token['request'];
 		$url .= '&oauth_version=1.0';	
 		$rs = $this->curl($url);
@@ -107,6 +110,7 @@ class JYMEngine
 		}
 	
 		$this->_token['access'] = $access_token;
+		$this->_expires = $ts + $this->_token['access']['oauth_expires_in'];
 		
 		return true;	
 	}
@@ -515,6 +519,10 @@ class JYMEngine
 	public function get_error()
 	{
 		return $this->_error;
+	}
+
+	public function expires() {
+		return $this->_expires;
 	}
 
 }
